@@ -11,7 +11,7 @@ if "conversation" not in st.session_state:
 
 load_dotenv()
 
-api = os.getenv('api')
+api = os.getenv('GROQ_API_KEY')
 api = Groq(api_key = api)
 
 st.sidebar.title('Interview Topics')
