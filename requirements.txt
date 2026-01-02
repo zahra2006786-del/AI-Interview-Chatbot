@@ -1,4 +1,3 @@
 groq
-dotenv
-os
+python-dotenv
 streamlit
