@@ -3,7 +3,7 @@ from dotenv import load_dotenv
 import os
 import streamlit as st
 
-st.title('Your AI Tutor 🤖')
+st.title('Your AI Interview Bot 🤖')
 
 if "conversation" not in st.session_state:
     st.session_state.conversation = [{"role": "system", "content": "You are a strict but good and friendly AI interviewer. Give answers in about 20 words"}]
