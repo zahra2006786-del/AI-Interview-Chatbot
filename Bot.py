@@ -4,63 +4,37 @@ import os
 import streamlit as st
 import json
 
+# -------------------- SETUP --------------------
 load_dotenv()
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-client = OpenAI(api_key = os.getenv('OPENAI_API_KEY'))
+st.set_page_config(page_title="AI Interview Bot", layout="centered")
+st.title("🎤 AI Interview Bot (HR Mode)")
 
-st.title('Your AI Interview Bot 🤖')
+# -------------------- SESSION STATE --------------------
+defaults = {
+    "started": False,
+    "question_no": 0,
+    "conversation": [],
+    "ui_history": [],
+    "results": [],
+    "current_question": "",
+    "topic": ""
+}
 
-if 'custom_topic' not in st.session_state:
-    st.session_state.custom_topic = ''
+for k, v in defaults.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
-if 'started' not in st.session_state:
-    st.session_state.started = False
-
-if 'question_no' not in st.session_state:
-    st.session_state.question_no = 0
-
-if 'conversation' not in st.session_state:
-    st.session_state.conversation = []
-
-if 'results' not in st.session_state:
-    # Yahan question, topics, marks store honge
-    st.session_state.results = []
-
-if 'ui_history' not in st.session_state:
-    st.session_state.ui_history = []
-
-st.sidebar.title('Interview Settings')
-
-# Select Topic
+# -------------------- SIDEBAR --------------------
+st.sidebar.header("Interview Settings")
 
 preset_topic = st.sidebar.selectbox(
-    'Select Topic',
-    [
-        '',
-        'Python',
-        'Machine Learning',
-        'Deep Learning',
-        'Web Development',
-        'C',
-        'C++',
-        'Java',
-        'Javascript',
-        'Frontend Languages'
-    ],
-    index=0
+    "Select Topic",
+    ["", "Python", "Machine Learning", "Deep Learning","Web Development", "C", "C++", "Java", "Javascript", "Frontend Languages"]
 )
 
-# Auto-fill text input if preset selected
-if preset_topic:
-    st.session_state.custom_topic = preset_topic
-# Choose difficulty
-
-difficulty = st.sidebar.slider('Select Difficulty', 
-                               min_value = 1,
-                               max_value = 3,
-                               value = 1)
-
-# Difficulty logic
+difficulty = st.sidebar.slider("Difficulty", 1, 3, 1)
 
 if difficulty == 1:
     diff_text = 'easy, beginner level questions'
@@ -74,189 +48,183 @@ else:
     diff_text = 'Hard level, advanced interview questions'
     marking_style = 'very strict'
 
-# Interview start 
-st.subheader("Choose Interview Topic")
-
 custom_topic = st.text_input(
     "Enter your interview topic (you can type your own):",
-    value=st.session_state.custom_topic
-)
+    value=preset_topic
+).strip()
 
-# Keep session state updated
-st.session_state.custom_topic = custom_topic.strip()
-
-final_topic = st.session_state.custom_topic
-
-if not final_topic:
-    st.warning("Please select or enter a topic to start the interview.")
+if not custom_topic:
+    st.warning("Please select or enter a topic.")
     st.stop()
 
-if st.button('Start interview'):
+# -------------------- START INTERVIEW --------------------
+if st.button("Start Interview"):
     st.session_state.started = True
     st.session_state.question_no = 1
+    st.session_state.topic = custom_topic
     st.session_state.conversation = []
-    st.session_state.results = []
     st.session_state.ui_history = []
+    st.session_state.results = []
 
     system_prompt = f"""
-You are a professional AI Interviewer but good and polite.
+You are a senior HR technical interviewer but good and polite.
 but when the interviewee give wrong answers again and again, 
 reprimand the interviewee.
 
-Interview Topic : {final_topic}
-Difficulty level : {diff_text}
-Marking style : {marking_style}
+Interview topic: {custom_topic}
+Difficulty: {diff_text}
+Marking Style: {marking_style}
 
-Rules:
-- Ask only one question at a time
+STRICT RULES:
 - Ask exactly 5 questions
-- Questions must be direct and specific
-- Do NOT use concepts or methods from other languages topics.
+- Ask ONE question at a time
+- No greetings, no introduction
+- Do NOT use concepts or methods from other languages, topics.
 - Ask questions strictly based on topic syntax and features.
-- if the interviewee give the topic in the text input take the interview on that topic
 - DO NOT repeat question numbers
-- Ask ONLY the question text
 - Questions must follow the selected topic and difficulty
-- After each answer evaluate silently
-- Don"t ask the next question until the topic of the previous question is completely clear.
-- Do not show marks
-- Don't label the greet with Question, only show Question before the real question
-- After each answer, respond ONLY in JSON:
+- Be professional and strict
+- Penalize vague or incorrect answers
+- If answer is weak, mention it clearly
+- Give feedback after each answer
+- Do not reveal marks to candidate
+IMPORTANT:
+- First response MUST be ONLY the first interview question (plain text, no JSON)
+- JSON response is REQUIRED ONLY AFTER user answers
+- After each answer respond ONLY in JSON:
 {{
-  "score": <0-10>,
-  "feedback": "<short feedback>",
-  "next_question": "<next question text>"
+  "score": 0-10,
+  "feedback": "short HR-style feedback",
+  "next_question": "next question text"
 }}
-- Ask next question yourself when the topic of previous question is completely clear.
+- First response MUST be ONLY the first question
+- Ask next question yourself
 """
-    
-    st.session_state.conversation = [{'role' : 'system', 'content' : system_prompt}]
-    
-    response = client.chat.completions.create(
-        model = 'gpt-4o-mini',
-        messages = st.session_state.conversation)
-    
-    first_ques = response.choices[0].message.content.strip()
-    st.session_state.current_ques = first_ques
 
-    st.session_state.ui_history.append({
-        'type' : 'question',
-        'text' : first_ques
-    })
     st.session_state.conversation.append(
-        {'role': 'assistant', 'content' : first_ques}
+        {"role": "system", "content": system_prompt}
+    )
+
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=st.session_state.conversation
+    )
+
+    first_q = response.choices[0].message.content.strip()
+    st.session_state.current_question = first_q
+
+    st.session_state.ui_history.append(
+        {"type": "question", "text": first_q}
+    )
+
+    st.session_state.conversation.append(
+        {"role": "assistant", "content": first_q}
     )
 
     st.rerun()
 
+# -------------------- INTERVIEW UI --------------------
 if st.session_state.started and st.session_state.question_no <= 5:
-    st.subheader('Interview Progress')
+
+    st.subheader(f"Question {st.session_state.question_no}")
 
     for item in st.session_state.ui_history:
-        if item['type'] == 'question':
-            st.markdown(f"🟢 **{item['text']}**")
-        elif item['type'] == 'answer':
+        if item["type"] == "question":
+            st.markdown(f"**🟢 {item['text']}**")
+        elif item["type"] == "answer":
             st.markdown(f"👤 **Your Answer:** {item['text']}")
-        elif item['type'] == 'feedback':
-            st.info(f"🤖 Feedback: **{item['text']}**")
+        elif item["type"] == "feedback":
+            st.info(f"🤖 HR Feedback: {item['text']}")
 
+    # ---------- FORM (IMPORTANT FIX) ----------
+    with st.form("answer_form", clear_on_submit=True):
+        user_answer = st.text_input("Your Answer")
+        submitted = st.form_submit_button("Submit Answer")
 
-    user_ans = st.text_input(
-        'Your Answer:',
-        key=f'ans_{st.session_state.question_no}'
-    )
+    if submitted:
+        if user_answer.strip() == "":
+            st.warning("Answer cannot be empty.")
+            st.stop()
 
-    if st.button('Submit Answer'):
         st.session_state.ui_history.append(
-            {'type' : 'answer', 'text' : user_ans}
+            {"type": "answer", "text": user_answer}
         )
+
         st.session_state.conversation.append(
-            {'role': 'user', 'content': user_ans}
+            {"role": "user", "content": user_answer}
         )
 
         eval_prompt = """
-Respond ONLY in valid json.
-No extra text.
-
-{"score" : <integer 0-10>,
-"feedback" : "<short feedback>",
-"next_question" : "<next question>"}
-
+Respond ONLY in valid JSON.
+No explanations.
 """
 
-        st.session_state.conversation.append(
-            {'role' : 'system', 'content' : eval_prompt}
-            )
+        messages = st.session_state.conversation + [
+            {"role": "system", "content": eval_prompt}
+        ]
 
         response = client.chat.completions.create(
-                model = 'gpt-4o-mini',
-                messages = st.session_state.conversation
-            )
+            model="gpt-4o-mini",
+            messages=messages,
+            response_format={"type": "json_object"}
+        )
 
-        ai_reply = response.choices[0].message.content
+        data = json.loads(response.choices[0].message.content)
 
-        ## Safe json format
+        score = int(data["score"])
+        feedback = data["feedback"]
+        next_q = data["next_question"]
 
-        try:
-            data = json.loads(ai_reply)
-            score = int(data.get('score', 0))
-            feedback = data.get('feedback', "")
-            next_ques = data.get('next_question', "")
+        st.session_state.ui_history.append(
+            {"type": "feedback", "text": feedback}
+        )
 
+        st.session_state.results.append({
+            "question_no": st.session_state.question_no,
+            "question": st.session_state.current_question,
+            "feedback": feedback,
+            "marks": score,
+            "answer": user_answer
+        })
+
+        st.session_state.question_no += 1
+
+        if st.session_state.question_no <= 5:
+            st.session_state.current_question = next_q
             st.session_state.ui_history.append(
-                {'type' : 'feedback',
-                 'text': feedback}
+                {"type": "question", "text": next_q}
+            )
+            st.session_state.conversation.append(
+                {"role": "assistant", "content": next_q}
             )
 
-        except Exception:
-            score = 0
-            feedback = 'Evaluation failed'
-            next_ques = response.choices[0].message.content.strip()
+        st.rerun()
 
-        st.session_state.results.append(
-                {'question_no' : st.session_state.question_no,
-                 'topic' : final_topic,
-                 'question' : st.session_state.current_ques,
-                 'marks' : score}
-            )
-
-        st.session_state.conversation.append(
-                {'role' : 'assistant' , 'content' : ai_reply}
-            )
-                        
-            # Next Question
-
-        if st.session_state.question_no < 5:
-                st.session_state.question_no += 1
-                st.session_state.ui_history.append({
-                'type' : 'question',
-                'text' : f'Question : {st.session_state.question_no}: {next_ques}'
-            })
-                st.session_state.conversation.append(
-                    {'role' : 'assistant', 'content' : next_ques}
-                )
-                st.rerun()
-        else:
-            st.session_state.question_no += 1
-            st.rerun()
-            # Interview end
-
+# -------------------- FINAL REPORT --------------------
 if st.session_state.started and st.session_state.question_no > 5:
-    st.success('Interview completed ✅')
+    st.success("Interview Completed ✅")
     st.balloons()
-    st.subheader('Detailed Marks Report')
+    st.subheader("📊 HR Evaluation Report")
 
     total = 0
     for r in st.session_state.results:
         st.markdown(
-                        f"""
-#### Question : {r['question_no']}\n
-- Topic : {r['topic']}\n
-- Question Asked : {r['question']}\n
-- Marks : {r['marks']}/10
+            f"""
+**Question {r['question_no']}**
+- Question: {r['question']}
+- Answer: {r['answer']}
+- HR Feedback: {r['feedback']}
+- Marks: {r['marks']}/10
 ---
 """
-                    )
+        )
+        total += r["marks"]
 
-        total += r['marks']
-    st.subheader(f"🎯 Overall Score {total}/50")
+    st.subheader(f"🎯 Final Score: {total}/50")
+
+    if total < 15:
+        st.error("❌ HR Verdict: Not Suitable")
+    elif total < 35:
+        st.warning("⚠️ HR Verdict: Needs Improvement")
+    else:
+        st.success("✅ HR Verdict: Strong Candidate")
