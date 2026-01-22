@@ -6,7 +6,7 @@ import json
 
 # -------------------- SETUP --------------------
 load_dotenv()
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI()
 
 st.set_page_config(page_title="AI Interview Bot", layout="centered")
 st.title("🎤 AI Interview Bot (HR Mode)")
